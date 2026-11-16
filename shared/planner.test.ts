@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {resolveMembers,normalizeRoster,moveRoster,previewBonds,bondThresholds} from './planner';
+import {validatePlan} from './plan';
+import type {Operator,Piece,CatalogBond} from './types';
+const op:Operator={id:'char_a',name:'甲',profession:'近卫',rarity:'TIER_6',chess:[{rank:3,bonds:[{id:'x',name:'X'},{id:'miraShip',name:'奇迹'}]},{rank:3,bonds:[{id:'x',name:'X'}]}]};
+const pieces:Piece[]=[{id:op.id,uid:'1',form:0,cell:0,zone:'board'},{id:op.id,uid:'2',form:1,cell:1,zone:'board'},{id:op.id,uid:'3',form:0,cell:null,zone:'reserve'}];
+const catalog:CatalogBond[]=[{id:'x',name:'X',type:'SEASON',raw:{},description:'',thresholds:[3,6]},{id:'miraShip',name:'奇迹',type:'REGULAR',raw:{},description:'',thresholds:[2]}];
+test('TS迁移保持重复棋子独立移动与羁绊按身份去重',()=>{const members=resolveMembers(pieces,{[op.id]:op});assert.equal(members.length,3);assert.equal(previewBonds(catalog,members)[0].count,1);const next=moveRoster(members,'2','reserve');assert.equal(next.find(p=>p.uid==='1')?.cell,0);assert.equal(next.find(p=>p.uid==='2')?.zone,'reserve');assert.deepEqual(normalizeRoster(pieces,{[op.id]:op}).members,pieces);});
+test('整备只参与特定羁绊且阈值解析排除层数',()=>{const result=previewBonds(catalog,resolveMembers([pieces[2]],{[op.id]:op}));assert.equal(result.find(b=>b.id==='x')?.count,0);assert.equal(result.find(b=>b.id==='miraShip')?.count,1);assert.deepEqual(bondThresholds({activeCount:3,desc:'<在场<@x>6</>名干员>提升50% <达到100层>'}),[3,6]);});
+test('严格校验版本4、人口、重复实例、地图冲突',()=>{const plan={version:4,season:'regulation_seq1',personnel:false,members:pieces};assert.deepEqual(validatePlan(plan),plan);assert.throws(()=>validatePlan({...plan,members:[pieces[0],pieces[0]]}));assert.throws(()=>validatePlan({...plan,members:Array.from({length:9},(_,i)=>({...pieces[0],uid:String(i),cell:i}))}));});
